@@ -1,0 +1,32 @@
+#todo-list-app {
+    max-width: 500px;
+    margin: 20px auto;
+    background: #fff;
+    padding: 20px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+
+#todo-list-app input[type="text"],
+#todo-list-app select {
+    width: calc(100% - 50px);
+    padding: 8px;
+    margin-bottom: 10px;
+}
+
+#todo-list-app button {
+    padding: 8px 15px;
+    margin-left: 5px;
+}
+
+#todo-items {
+    list-style: none;
+    padding: 0;
+}
+
+#todo-items li {
+    background: #f4f4f4;
+    margin-bottom: 5px;
+    padding: 10px;
+    border-radius: 3px;
+}
