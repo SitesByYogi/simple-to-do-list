@@ -2,8 +2,8 @@
 /**
  * Plugin Name: Simple To-Do List
  * Description: A simple WordPress plugin to manage a to-do list with enhanced features, including categories.
- * Version: 1.3
- * Author: SitesByYogi
+ * Version: 1.5
+ * Author: Your Name
  */
 
 // Exit if accessed directly.
@@ -31,6 +31,55 @@ function todo_register_post_type() {
         'show_ui' => true,  // Display in admin dashboard
         'supports' => array('title'),
         'menu_icon' => 'dashicons-list-view',
+        'has_archive' => false,
+        'rewrite' => false,
+    ));
+    
+    // Register custom taxonomy for Categories
+    register_taxonomy('todo_category', 'todo', array(
+        'labels' => array(
+            'name' => __('To-Do Categories'),
+            'singular_name' => __('To-Do Category'),
+            'search_items' => __('Search To-Do Categories'),
+            'all_items' => __('All To-Do Categories'),
+            'parent_item' => __('Parent To-Do Category'),
+            'parent_item_colon' => __('Parent To-Do Category:'),
+            'edit_item' => __('Edit To-Do Category'),
+            'update_item' => __('Update To-Do Category'),
+            'add_new_item' => __('Add New To-Do Category'),
+            'new_item_name' => __('New To-Do Category Name'),
+            'menu_name' => __('Categories'),
+        ),
+        'hierarchical' => true, // Set to true for category-like behavior
+        'show_ui' => true,
+        'show_admin_column' => true,
+        'query_var' => true,
+        'rewrite' => array('slug' => 'todo-category'),
+    ));
+    
+    // Register custom taxonomy for Tags
+    register_taxonomy('todo_tag', 'todo', array(
+        'labels' => array(
+            'name' => __('To-Do Tags'),
+            'singular_name' => __('To-Do Tag'),
+            'search_items' => __('Search To-Do Tags'),
+            'popular_items' => __('Popular To-Do Tags'),
+            'all_items' => __('All To-Do Tags'),
+            'edit_item' => __('Edit To-Do Tag'),
+            'update_item' => __('Update To-Do Tag'),
+            'add_new_item' => __('Add New To-Do Tag'),
+            'new_item_name' => __('New To-Do Tag Name'),
+            'separate_items_with_commas' => __('Separate to-do tags with commas'),
+            'add_or_remove_items' => __('Add or remove to-do tags'),
+            'choose_from_most_used' => __('Choose from the most used to-do tags'),
+            'not_found' => __('No to-do tags found'),
+            'menu_name' => __('Tags'),
+        ),
+        'hierarchical' => false, // Set to false for tag-like behavior
+        'show_ui' => true,
+        'show_admin_column' => true,
+        'query_var' => true,
+        'rewrite' => array('slug' => 'todo-tag'),
     ));
 }
 add_action('init', 'todo_register_post_type');
@@ -44,6 +93,13 @@ function todo_enqueue_admin_scripts($hook) {
     wp_enqueue_style('jquery-ui-css', '//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css'); // Enqueue jQuery UI CSS
     wp_enqueue_script('todo-admin-js', plugin_dir_url(__FILE__) . 'admin/js/todo-admin.js', array('jquery', 'jquery-ui-datepicker'), '1.0', true);
     wp_enqueue_style('todo-admin-css', plugin_dir_url(__FILE__) . 'admin/css/todo-admin.css');
+
+    // Add JavaScript to handle adding new categories dynamically
+    wp_enqueue_script('todo-category-js', plugin_dir_url(__FILE__) . 'admin/js/todo-category.js', array('jquery'), '1.0', true);
+    wp_localize_script('todo-category-js', 'todoCategory', array(
+        'ajax_url' => admin_url('admin-ajax.php'),
+        'nonce'    => wp_create_nonce('add_new_category')
+    ));
 }
 add_action('admin_enqueue_scripts', 'todo_enqueue_admin_scripts');
 
@@ -51,8 +107,8 @@ add_action('admin_enqueue_scripts', 'todo_enqueue_admin_scripts');
 function todo_add_meta_boxes() {
     add_meta_box('todo_due_date', __('Due Date', 'simple-todo-list'), 'todo_due_date_callback', 'todo', 'side');
     add_meta_box('todo_priority', __('Priority', 'simple-todo-list'), 'todo_priority_callback', 'todo', 'side');
-    add_meta_box('todo_category', __('Category', 'simple-todo-list'), 'todo_category_callback', 'todo', 'side');
-    add_meta_box('todo_description', __('Short Description', 'simple-todo-list'), 'todo_description_callback', 'todo', 'normal');
+    add_meta_box('todo_category', __('Status', 'simple-todo-list'), 'todo_category_callback', 'todo', 'side');
+    add_meta_box('todo_description', __('Description', 'simple-todo-list'), 'todo_description_callback', 'todo', 'normal');
 }
 add_action('add_meta_boxes', 'todo_add_meta_boxes');
 
@@ -73,8 +129,19 @@ function todo_priority_callback($post) {
 }
 
 function todo_category_callback($post) {
-    $category = get_post_meta($post->ID, '_todo_category', true);
-    echo '<input type="text" name="todo_category" id="todo_category" value="' . esc_attr($category) . '" class="widefat">';
+    // Fetch all existing categories from the options
+    $categories = get_option('todo_categories', array());
+    $current_category = get_post_meta($post->ID, '_todo_category', true);
+
+    // Display the dropdown and input to add new categories
+    echo '<select name="todo_category" id="todo_category" class="widefat">';
+    echo '<option value="">' . __('Select a status', 'simple-todo-list') . '</option>';
+    foreach ($categories as $category) {
+        $selected = ($current_category === $category) ? 'selected' : '';
+        echo '<option value="' . esc_attr($category) . '" ' . $selected . '>' . esc_html($category) . '</option>';
+    }
+    echo '</select>';
+
 }
 
 // Add Meta Box Callback for Short Description
@@ -102,7 +169,7 @@ add_action('save_post', 'todo_save_meta_boxes');
 
 // Add custom columns to the To-Do List admin table
 function todo_custom_columns($columns) {
-    $columns['todo_category'] = __('Category', 'simple-todo-list');
+    $columns['todo_category'] = __('Status', 'simple-todo-list');
     return $columns;
 }
 add_filter('manage_todo_posts_columns', 'todo_custom_columns');
@@ -120,8 +187,8 @@ add_action('manage_todo_posts_custom_column', 'todo_custom_column_content', 10, 
 function todo_add_categories_submenu() {
     add_submenu_page(
         'edit.php?post_type=todo', // Parent slug
-        __('Categories', 'simple-todo-list'), // Page title
-        __('Categories', 'simple-todo-list'), // Menu title
+        __('Status', 'simple-todo-list'), // Page title
+        __('Status', 'simple-todo-list'), // Menu title
         'manage_options', // Capability
         'todo-categories', // Menu slug
         'todo_categories_page_callback' // Callback function
@@ -131,6 +198,11 @@ add_action('admin_menu', 'todo_add_categories_submenu');
 
 // Callback function for the Categories admin page
 function todo_categories_page_callback() {
+    // Check if user has permission to manage options
+    if (!current_user_can('manage_options')) {
+        wp_die(__('You do not have sufficient permissions to access this page.'));
+    }
+
     ?>
     <div class="wrap">
         <h1><?php esc_html_e('To-Do Categories', 'simple-todo-list'); ?></h1>
@@ -142,7 +214,9 @@ function todo_categories_page_callback() {
         </form>
 
         <?php
+        // Handle adding a new category
         if (isset($_POST['add_category']) && isset($_POST['new_category'])) {
+            // Verify nonce for security
             if (!isset($_POST['add_category_nonce']) || !wp_verify_nonce($_POST['add_category_nonce'], 'add_category_nonce_action')) {
                 wp_die(__('Security check failed.', 'simple-todo-list'));
             }
@@ -171,13 +245,32 @@ function todo_categories_page_callback() {
                     'todo_category_filter' => urlencode($category)
                 ), admin_url('edit.php'));
                 
-                echo '<li><a href="' . esc_url($category_link) . '">' . esc_html($category) . '</a> <a href="?page=todo-categories&delete_category=' . urlencode($category) . '" class="button button-secondary">' . esc_html__('Delete', 'simple-todo-list') . '</a></li>';
+                // Add nonce and capabilities check to delete link
+                $delete_link = wp_nonce_url(
+                    add_query_arg(
+                        array(
+                            'page' => 'todo-categories',
+                            'delete_category' => urlencode($category)
+                        ), 
+                        admin_url('admin.php')
+                    ),
+                    'delete_category_nonce_action',
+                    'delete_category_nonce'
+                );
+                
+                echo '<li><a href="' . esc_url($category_link) . '">' . esc_html($category) . '</a> 
+                <a href="' . esc_url($delete_link) . '" class="button button-secondary">' . esc_html__('Delete', 'simple-todo-list') . '</a></li>';
             }
             echo '</ul>';
         }
 
         // Handle deleting categories
-        if (isset($_GET['delete_category'])) {
+        if (isset($_GET['delete_category']) && isset($_GET['delete_category_nonce'])) {
+            // Check permission and verify nonce
+            if (!current_user_can('manage_options') || !wp_verify_nonce($_GET['delete_category_nonce'], 'delete_category_nonce_action')) {
+                wp_die(__('Sorry, you are not allowed to access this page.', 'simple-todo-list'));
+            }
+
             $delete_category = sanitize_text_field(urldecode($_GET['delete_category']));
             $categories = array_filter($categories, function($cat) use ($delete_category) {
                 return $cat !== $delete_category;
@@ -189,6 +282,28 @@ function todo_categories_page_callback() {
     </div>
     <?php
 }
+
+// AJAX Handler for Adding New Category
+function todo_add_new_category() {
+    check_ajax_referer('add_new_category', 'nonce');
+
+    if (isset($_POST['new_category'])) {
+        $new_category = sanitize_text_field($_POST['new_category']);
+        $categories = get_option('todo_categories', array());
+
+        if (!in_array($new_category, $categories)) {
+            $categories[] = $new_category;
+            update_option('todo_categories', $categories);
+            wp_send_json_success($new_category);
+        } else {
+            wp_send_json_error('Category already exists.');
+        }
+    }
+
+    wp_send_json_error('Invalid category.');
+}
+add_action('wp_ajax_todo_add_new_category', 'todo_add_new_category');
+
 
 // Add custom filters to the admin list table
 function todo_add_filters_to_admin() {

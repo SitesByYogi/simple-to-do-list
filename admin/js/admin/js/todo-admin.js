@@ -78,4 +78,43 @@ jQuery(document).ready(function ($) {
             });
         }
     });
+
+    // Add new category dynamically from the To-Do editor
+    $('#add_new_category_button').on('click', function () {
+        var newCategory = $('#new_category_name').val().trim();
+
+        if (newCategory === '') {
+            alert('Please enter a category name.');
+            return;
+        }
+
+        $.ajax({
+            url: todoCategory.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'todo_add_new_category',
+                new_category: newCategory,
+                nonce: todoCategory.nonce
+            },
+            success: function (response) {
+                if (response.success) {
+                    // Add the new category to the dropdown and select it
+                    $('<option>', {
+                        value: response.data,
+                        text: response.data,
+                        selected: true
+                    }).appendTo('#todo_category');
+
+                    // Clear the input field
+                    $('#new_category_name').val('');
+                    alert('Category added successfully!');
+                } else {
+                    alert(response.data);
+                }
+            },
+            error: function () {
+                alert('An error occurred while adding the category.');
+            }
+        });
+    });
 });
